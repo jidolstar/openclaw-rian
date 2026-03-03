@@ -11,3 +11,5 @@
 2. Markdown 파일로 정리 후 `daily/`에 저장
 3. `git add/commit` 이후 `git push origin ai-briefings`
 4. 하루 요약은 프로젝트 단계와 관계없이 매일 7시 알림
+## 오늘의 흐름
+- GitHub 스케줄링을 원한다면 credential helper store 설정 후 토큰으로 자동 푸시
