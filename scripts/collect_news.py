@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Collect AI/tech headlines from configured feeds and dump Markdown summaries."""
+"""Collect AI/tech headlines from configured feeds and dump Markdown summaries with Korean translations."""
 import json
 import logging
 import hashlib
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import Dict, List, Tuple
 
 import requests
 import xml.etree.ElementTree as ET
+from googletrans import Translator
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 FEEDS_FILE = BASE_DIR / "feeds.json"
@@ -16,8 +17,10 @@ DAILY_DIR = BASE_DIR / "daily"
 MONTHLY_DIR = BASE_DIR / "monthly"
 STATE_DIR = BASE_DIR / "state"
 LOGS_DIR = BASE_DIR / "logs"
+MAX_ENTRIES_PER_FEED = 10
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+TRANSLATOR = Translator()
 
 
 def ensure_dirs() -> None:
@@ -34,7 +37,7 @@ def load_feeds() -> List[Dict]:
 
 def parse_rss(content: str) -> List[Dict]:
     root = ET.fromstring(content)
-    items = []
+    items: List[Dict] = []
     for item in root.findall(".//item"):
         title = item.findtext("title")
         link = item.findtext("link")
@@ -46,12 +49,13 @@ def parse_rss(content: str) -> List[Dict]:
 
 
 def fetch_feed(feed: Dict) -> Tuple[List[Dict], List[str]]:
-    errors = []
-    entries = []
+    errors: List[str] = []
+    entries: List[Dict] = []
     try:
         resp = requests.get(feed["url"], timeout=10)
         resp.raise_for_status()
-        entries = parse_rss(resp.text)
+        parsed = parse_rss(resp.text)
+        entries = parsed[:MAX_ENTRIES_PER_FEED]
         logging.info("Fetched %d entries from %s", len(entries), feed["id"])
     except Exception as exc:  # pragma: no cover
         logging.error("Failed to fetch %s: %s", feed["url"], exc)
@@ -61,6 +65,16 @@ def fetch_feed(feed: Dict) -> Tuple[List[Dict], List[str]]:
 
 def hash_entry(feed_id: str, link: str) -> str:
     return hashlib.sha256(f"{feed_id}|{link}".encode()).hexdigest()
+
+
+def translate_text(text: str) -> str:
+    try:
+        translated = TRANSLATOR.translate(text, dest="ko")
+        ko_text = translated.text
+        return f"{ko_text} ({text})"
+    except Exception as exc:  # pragma: no cover
+        logging.warning("Translation failed for %s: %s", text, exc)
+        return text
 
 
 def load_state(year_month: str) -> Dict:
@@ -86,7 +100,12 @@ def append_log(year_month: str, lines: List[str]) -> None:
 def summarize_entries(headlines: List[Dict]) -> str:
     if not headlines:
         return "현재 새로운 항목이 없습니다."
-    bullets = [f"- [{entry['title']}]({entry['link']})" for entry in headlines]
+    bullets: List[str] = []
+    for entry in headlines:
+        translated = translate_text(entry["title"])
+        bullets.append(
+            f"- {translated} \u2013 {entry['source']} ({entry['link']})"
+        )
     return "\n".join(bullets)
 
 
@@ -122,8 +141,8 @@ def main() -> None:
     state = load_state(year_month)
     seen = set(state.get("seen", []))
 
-    headlines = []
-    errors = []
+    headlines: List[Dict] = []
+    errors: List[str] = []
 
     for feed in feeds:
         entries, fetch_errors = fetch_feed(feed)
