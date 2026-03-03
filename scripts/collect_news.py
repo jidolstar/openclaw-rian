@@ -3,6 +3,8 @@
 import json
 import logging
 import hashlib
+import re
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -18,6 +20,25 @@ MONTHLY_DIR = BASE_DIR / "monthly"
 STATE_DIR = BASE_DIR / "state"
 LOGS_DIR = BASE_DIR / "logs"
 MAX_ENTRIES_PER_FEED = 10
+KEYWORD_LIMIT = 6
+STOPWORDS = {
+    "and",
+    "the",
+    "for",
+    "with",
+    "from",
+    "that",
+    "this",
+    "using",
+    "through",
+    "into",
+    "about",
+    "via",
+    "new",
+    "ai",
+    "artificial",
+    "intelligence",
+}
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 TRANSLATOR = Translator()
@@ -77,6 +98,23 @@ def translate_text(text: str) -> str:
         return text
 
 
+def extract_keywords(titles: List[str], limit: int = KEYWORD_LIMIT) -> List[str]:
+    counter = Counter()
+    representative: Dict[str, str] = {}
+    for title in titles:
+        for raw in re.findall(r"[A-Za-z0-9+#]{2,}", title):
+            normalized = raw.strip("#+").lower()
+            if not normalized or normalized in STOPWORDS or normalized.isdigit():
+                continue
+            counter[normalized] += 1
+            if normalized not in representative:
+                representative[normalized] = raw
+    keywords: List[str] = []
+    for term, _ in counter.most_common(limit):
+        keywords.append(representative.get(term, term))
+    return keywords
+
+
 def load_state(year_month: str) -> Dict:
     state_file = STATE_DIR / f"{year_month}.json"
     if state_file.exists():
@@ -109,11 +147,13 @@ def summarize_entries(headlines: List[Dict]) -> str:
     return "\n".join(bullets)
 
 
-def build_markdown(date: datetime, headlines: List[Dict], errors: List[str]) -> str:
-    lines = [f"# AI Briefing · {date:%Y-%m-%d}", "", "## Today", ""]
-    lines.append(summarize_entries(headlines))
+def build_markdown(date: datetime, headlines: List[Dict], errors: List[str], keywords: List[str]) -> str:
+    lines = [f"# AI Briefing · {date:%Y-%m-%d}", "", "## Today", "", summarize_entries(headlines)]
+    if keywords:
+        lines.extend(["", "## Keywords"])
+        lines.extend(f"- {translate_text(keyword)}" for keyword in keywords)
     if errors:
-        lines.append("\n## Errors / Missing Feeds")
+        lines.extend(["", "## Errors / Missing Feeds"])
         lines.extend(f"- {error}" for error in errors)
     return "\n".join(lines)
 
@@ -159,7 +199,8 @@ def main() -> None:
                 "region": feed.get("region", "")
             })
 
-    markdown = build_markdown(today, headlines, errors)
+    keywords = extract_keywords([entry["title"] for entry in headlines])
+    markdown = build_markdown(today, headlines, errors, keywords)
     save_daily(today, markdown)
     append_monthly(today, headlines)
 

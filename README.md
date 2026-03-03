@@ -30,3 +30,9 @@
 - `scripts/collect_news.py`는 RSS/YouTube 피드를 읽고 최신 항목을 `daily/`/`monthly/`로 저장합니다.
 - 중복 방지를 위해 `state/YYYY-MM.json`에 링크 해시를 누적합니다. 실패한 피드/URL은 `logs/YYYY-MM.log`에 이유와 함께 남겨서 대체 루트를 찾을 수 있게 합니다.
 - 필요하면 이 스크립트를 cron이나 heartbeat로 하루 1회 실행하면 전체 흐름이 자동화됩니다.
+## Scheduling
+- 매일 새벽 6시에 `/home/jidolstar/.openclaw/workspace/ai-briefings-clone/scripts/run_and_push.sh`을 실행하도록 cron을 등록하면 전체 파이프라인이 자동으로 돌 수 있어요.
+  ```cron
+  0 6 * * * /home/jidolstar/.openclaw/workspace/ai-briefings-clone/scripts/run_and_push.sh >> /home/jidolstar/.openclaw/workspace/ai-briefings-clone/logs/collector-cron.log 2>&1
+  ```
+- cron을 쓰기 어려우면 OpenClaw heartbeat/cron을 써서 같은 스크립트를 하루 1회 호출해도 됩니다.
