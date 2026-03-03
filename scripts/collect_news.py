@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""Collect AI/tech headlines from configured feeds and dump Markdown summaries."""
+import json
+import logging
+import hashlib
+from datetime import datetime
+from pathlib import Path
+from typing import List, Dict, Tuple
+
+import requests
+import xml.etree.ElementTree as ET
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+FEEDS_FILE = BASE_DIR / "feeds.json"
+DAILY_DIR = BASE_DIR / "daily"
+MONTHLY_DIR = BASE_DIR / "monthly"
+STATE_DIR = BASE_DIR / "state"
+LOGS_DIR = BASE_DIR / "logs"
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+
+def ensure_dirs() -> None:
+    for folder in (DAILY_DIR, MONTHLY_DIR, STATE_DIR, LOGS_DIR):
+        folder.mkdir(parents=True, exist_ok=True)
+
+
+def load_feeds() -> List[Dict]:
+    if not FEEDS_FILE.exists():
+        logging.warning("feeds.json is missing, nothing to crawl")
+        return []
+    return json.loads(FEEDS_FILE.read_text())
+
+
+def parse_rss(content: str) -> List[Dict]:
+    root = ET.fromstring(content)
+    items = []
+    for item in root.findall(".//item"):
+        title = item.findtext("title")
+        link = item.findtext("link")
+        published = item.findtext("pubDate")
+        if not title or not link:
+            continue
+        items.append({"title": title.strip(), "link": link.strip(), "pubDate": published or ""})
+    return items
+
+
+def fetch_feed(feed: Dict) -> Tuple[List[Dict], List[str]]:
+    errors = []
+    entries = []
+    try:
+        resp = requests.get(feed["url"], timeout=10)
+        resp.raise_for_status()
+        entries = parse_rss(resp.text)
+        logging.info("Fetched %d entries from %s", len(entries), feed["id"])
+    except Exception as exc:  # pragma: no cover
+        logging.error("Failed to fetch %s: %s", feed["url"], exc)
+        errors.append(str(exc))
+    return entries, errors
+
+
+def hash_entry(feed_id: str, link: str) -> str:
+    return hashlib.sha256(f"{feed_id}|{link}".encode()).hexdigest()
+
+
+def load_state(year_month: str) -> Dict:
+    state_file = STATE_DIR / f"{year_month}.json"
+    if state_file.exists():
+        return json.loads(state_file.read_text())
+    return {"seen": [], "updated": ""}
+
+
+def save_state(year_month: str, state: Dict) -> None:
+    state_file = STATE_DIR / f"{year_month}.json"
+    state_file.write_text(json.dumps(state, indent=2, ensure_ascii=False))
+
+
+def append_log(year_month: str, lines: List[str]) -> None:
+    log_file = LOGS_DIR / f"{year_month}.log"
+    now = datetime.utcnow().isoformat() + "Z"
+    with log_file.open("a", encoding="utf-8") as handle:
+        for line in lines:
+            handle.write(f"{now} - {line}\n")
+
+
+def summarize_entries(headlines: List[Dict]) -> str:
+    if not headlines:
+        return "현재 새로운 항목이 없습니다."
+    bullets = [f"- [{entry['title']}]({entry['link']})" for entry in headlines]
+    return "\n".join(bullets)
+
+
+def build_markdown(date: datetime, headlines: List[Dict], errors: List[str]) -> str:
+    lines = [f"# AI Briefing · {date:%Y-%m-%d}", "", "## Today", ""]
+    lines.append(summarize_entries(headlines))
+    if errors:
+        lines.append("\n## Errors / Missing Feeds")
+        lines.extend(f"- {error}" for error in errors)
+    return "\n".join(lines)
+
+
+def append_monthly(date: datetime, headlines: List[Dict]) -> None:
+    path = MONTHLY_DIR / f"{date:%Y-%m}.md"
+    header = f"# {date:%Y-%m} AI Briefing Summary\n\n"
+    append_line = f"- {date:%Y-%m-%d}: {len(headlines)} new entries"
+    if not path.exists():
+        path.write_text(header, encoding="utf-8")
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"{append_line}\n")
+
+
+def save_daily(date: datetime, markdown: str) -> None:
+    path = DAILY_DIR / f"{date:%Y-%m-%d}.md"
+    path.write_text(markdown, encoding="utf-8")
+
+
+def main() -> None:
+    ensure_dirs()
+    feeds = load_feeds()
+    today = datetime.utcnow()
+    year_month = today.strftime("%Y-%m")
+    state = load_state(year_month)
+    seen = set(state.get("seen", []))
+
+    headlines = []
+    errors = []
+
+    for feed in feeds:
+        entries, fetch_errors = fetch_feed(feed)
+        errors.extend(fetch_errors)
+        for entry in entries:
+            entry_id = hash_entry(feed["id"], entry["link"])
+            if entry_id in seen:
+                continue
+            seen.add(entry_id)
+            headlines.append({
+                "title": entry["title"],
+                "link": entry["link"],
+                "source": feed["title"],
+                "region": feed.get("region", "")
+            })
+
+    markdown = build_markdown(today, headlines, errors)
+    save_daily(today, markdown)
+    append_monthly(today, headlines)
+
+    state["seen"] = sorted(seen)
+    state["updated"] = today.isoformat() + "Z"
+    save_state(year_month, state)
+
+    if errors:
+        append_log(year_month, errors)
+
+    logging.info("Collected %d new headlines", len(headlines))
+
+
+if __name__ == "__main__":
+    main()
