@@ -1,30 +1,10 @@
 [
   {
-    "id": "chosunbiz-ai",
-    "region": "Korea",
-    "type": "rss",
-    "title": "조선비즈 AI",
-    "url": "https://biz.chosun.com/site/data/rss/it.xml"
-  },
-  {
-    "id": "hani-it",
-    "region": "Korea",
-    "type": "rss",
-    "title": "한겨레 IT",
-    "url": "https://www.hani.co.kr/rss/"
-  },
-  {
-    "id": "techcrunch-ai",
+    "id": "aifeed",
     "region": "Global",
     "type": "rss",
-    "title": "TechCrunch - Artificial Intelligence",
-    "url": "https://techcrunch.com/tag/artificial-intelligence/feed/"
-  },
-  {
-    "id": "lexfridman",
-    "region": "Global",
-    "type": "youtube",
-    "title": "Lex Fridman",
-    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCSHZKyawb77ixDdsGog4iWA"
+    "title": "AIFeed",
+    "url": "https://aifeed.dev/feed.xml",
+    "notes": "English -> Korean summary, keep key English terms"
   }
 ]

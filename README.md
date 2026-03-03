@@ -16,13 +16,9 @@
 4. 매일 7시에 요약 알림(메시지 + GitHub 링크)
 
 ## Feeds to monitor
-| Region | Type | Title | URL |
-| --- | --- | --- | --- |
-| Korea | RSS | 조선비즈 AI 섹션 | https://biz.chosun.com/site/data/rss/it.xml |
-| Korea | RSS | 한겨레 IT | https://www.hani.co.kr/rss/ (이후 개별 기사를 모아서 처리) |
-| Global | RSS | TechCrunch (Artificial Intelligence) | https://techcrunch.com/tag/artificial-intelligence/feed/ |
-| Global | RSS | MIT Technology Review AI | https://www.technologyreview.com/feed/ |
-| Global | YouTube RSS | Lex Fridman | https://www.youtube.com/feeds/videos.xml?channel_id=UCSHZKyawb77ixDdsGog4iWA |
+| Region | Type | Title | URL | Notes |
+| --- | --- | --- | --- | --- |
+| Global | RSS | AIFeed | https://aifeed.dev/feed.xml | 영어 콘텐츠는 자연스럽게 한국어로 번역, 중요한 단어는 영어 유지 (필요시 괄호 안에 영어도 함께)
 
 이 목록은 `feeds.json`으로도 관리되며 필요한 채널을 추가/수정하면 곧바로 스크립트가 대응합니다.
 
